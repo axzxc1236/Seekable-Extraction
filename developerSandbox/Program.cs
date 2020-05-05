@@ -10,7 +10,7 @@ namespace developerSandbox
         static void Main(string[] args)
         {
             ExtractorOptions option = new ExtractorOptions();
-            option.archive_filepath = @"F:\free mount test\test2_thought_process.txt.tar";
+            option.archive_filepath = @"F:\free mount test\Bigger than 8GB.tar";
             if (File.Exists(option.archive_filepath + ".statemap"))
                 File.Delete(option.archive_filepath + ".statemap");
             Extractor x = seekableExtraction.AutoExtractor.findExtractor(option);
@@ -19,13 +19,15 @@ namespace developerSandbox
                 Console.WriteLine("File is supported. extractor type: " + x.GetType());
                 x.Initialize();
                 Console.WriteLine($"Has {x.FileList.Count} files in total");
-                foreach (vFile file in x.FileList.Values) {
+                foreach (vFile file in x.FileList.Values)
+                {
                     Console.WriteLine($"Path: {file.AbsolutePath}");
-                    byte[] contents = x.Read(file.AbsolutePath, (int) file.Size, 0).data;
+                    byte[] contents = x.Read(file.AbsolutePath, 300, 0).data;
                     Console.WriteLine($"Content: {BitConverter.ToString(contents)}");
                 }
             }
-            else {
+            else
+            {
                 Console.WriteLine("Sorry, the file is not supported");
             }
             Console.WriteLine("Hello World!");

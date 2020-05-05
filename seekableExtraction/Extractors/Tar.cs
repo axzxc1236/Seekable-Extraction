@@ -9,7 +9,7 @@ namespace seekableExtraction.Extractors
      * https://www.gnu.org/software/tar/manual/html_node/Formats.html
      * https://en.wikipedia.org/wiki/Tar_(computing)
      * https://www.gnu.org/software/tar/manual/html_node/Standard.html
-     * 
+     * https://manpages.debian.org/testing/libarchive-dev/tar.5.en.html
      */
     public class Tar : Extractor
     {
@@ -25,6 +25,7 @@ namespace seekableExtraction.Extractors
             statemapPath = filepath + ".statemap";
             states = new Dictionary<string, TarState>();
             folderList = new Dictionary<string, vFolder>();
+            folderList.Add("/", vFolder.rootFolder);
             fileList = new Dictionary<string, vFile>();
         }
         public override Dictionary<string, vFile> FileList => fileList;
@@ -76,7 +77,7 @@ namespace seekableExtraction.Extractors
                     reader.BaseStream.Position += 24;
 
                     //File size
-                    current_state.size = NumberUtil.Bytes_to_number(reader.ReadBytes(12), 8);
+                    current_state.size = Read_file_size(reader);
 
                     //Skip metadata that has no use to this program
                     //Last modification time in numeric Unix time format (octal)  and  Checksum for header record
@@ -251,6 +252,42 @@ namespace seekableExtraction.Extractors
                 return true;
             }
             return false;
+        }
+
+        long Read_file_size(BinaryReader reader) {
+            try
+            {
+                if ((reader.ReadByte() & 0x80) == 0)
+                {
+                    //Normal file size format (<= 8GB)
+                    reader.BaseStream.Position--;
+                    return NumberUtil.Bytes_to_number(reader.ReadBytes(12), 8);
+                }
+                else
+                {
+                    //Special file size format
+                    //First bit in the first byte is used to indicate is this size format is in use
+                    //Then the rest of 95 bits is size in Binary, so on paper it supports up to Math.Pow(2,96)-1 byte file
+                    //I could use BigInteger, but I think it's fine to leave size in long
+                    //(Until some supercomputer needs to read a tar file that contains single file that exceeds 8PB file size????)
+                    //(With code that they found online randomly???????????????????????????????)
+                    //(Or maybe I underestimated how storage technology advances on consumer/prosumer grade hardware, if that happened before I quit coding for good or died, I can fix it by breaking backward compatibility)
+                    reader.BaseStream.Position--;
+                    byte[] encodedSize = reader.ReadBytes(12);
+                    long size = 0;
+                    encodedSize[0] &= 0x7F;
+                    //This code is specifically coded to throw OverflowException when ....... the code doesn't work
+                    //I can use bitwise operator but there will be no exception thrown
+                    //which may cause incorrect file size (e.g. nagative or 0)
+                    for (int i = 0; i < 12; i++)
+                        size += (long)Math.Pow(256, 11 - i) * encodedSize[i];
+                    return size;
+                }
+            }
+            catch (OverflowException)
+            {
+                throw new NotSupportedException("Looks like you are working with very large tar file (>8PiB) (assuming there is no other bug), I am sorry to say this program doesn't support it.");
+            }
         }
 
         public new static bool Check_compatibility(ExtractorOptions option) {
