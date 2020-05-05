@@ -10,9 +10,9 @@ namespace developerSandbox
         static void Main(string[] args)
         {
             ExtractorOptions option = new ExtractorOptions();
-            option.archive_filepath = @"F:\free mount test\test_files\test_files.tar";
-            //if (File.Exists(option.archive_filepath + ".statemap"))
-            //    File.Delete(option.archive_filepath + ".statemap");
+            option.archive_filepath = @"F:\free mount test\test2_thought_process.txt.tar";
+            if (File.Exists(option.archive_filepath + ".statemap"))
+                File.Delete(option.archive_filepath + ".statemap");
             Extractor x = seekableExtraction.AutoExtractor.findExtractor(option);
             if (x != null)
             {

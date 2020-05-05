@@ -54,7 +54,8 @@ namespace seekableExtraction.Extractors
             using (BinaryReader reader = new BinaryReader(fs))
             {
                 //1024 refers to end-of-file marker
-                while (reader.BaseStream.Position + 1024 != reader.BaseStream.Length)
+                while (!Skip_emprty_blocks(reader) &&
+                        reader.BaseStream.Position + 1024 < reader.BaseStream.Length)
                 {
                     long start_position = reader.BaseStream.Position;
 
@@ -230,6 +231,26 @@ namespace seekableExtraction.Extractors
                     writer.WriteLine(ts);
             }
             return true;
+        }
+
+        /// <summary>
+        /// Reads next 512 bytes of BinaryReader and check for null character<br/>
+        /// If there is any non-null character, the stream position is set back to what it originally was.<br/>
+        /// otherwise the stream position will skip to next tar block.
+        /// </summary>
+        /// <returns>If there are skipped block, it returns true, otherwise false.</returns>
+        bool Skip_emprty_blocks(BinaryReader reader) {
+            if (reader.BaseStream.Position + 512 < reader.BaseStream.Length) {
+                long initial_position = reader.BaseStream.Position;
+                for (int i = 0; i < 512; i++) {
+                    if (reader.ReadByte() != '\0') {
+                        reader.BaseStream.Position = initial_position;
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
         }
 
         public new static bool Check_compatibility(ExtractorOptions option) {
