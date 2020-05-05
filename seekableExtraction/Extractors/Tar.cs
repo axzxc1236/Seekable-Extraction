@@ -163,18 +163,8 @@ namespace seekableExtraction.Extractors
                 expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
                 reader.BaseStream.Position += 1;
 
-                for (int i = 0; i < 101; i++)
+                for (int i = (int)(reader.BaseStream.Position - initial_position); i < initial_position+512; i++)
                     checksum += reader.ReadByte();
-
-
-                //Checksum ustar header (if it exists)
-                if (reader.BaseStream.Position + 243 < reader.BaseStream.Length &&
-                    ByteUtil.Encode_to_string(reader.ReadBytes(6), ' ') == "75 73 74 61 72 00") //ustar marker
-                {
-                    checksum += 559;
-                    for (int i = 0; i < 237; i++)
-                        checksum += reader.ReadByte();
-                }
 
                 reader.BaseStream.Position = initial_position;
                 return expected_checksum == checksum;
