@@ -13,7 +13,7 @@ namespace seekableExtraction.Extractors
      */
     public class Tar : Extractor
     {
-        static int min_tar_size = 1024; //A valid non-multi-volume tar file should have at least 1024 bytes
+        const int min_tar_size = 1024; //A valid non-multi-volume tar file should have at least 1024 bytes
         string filepath, statemapPath;
         Dictionary<string, TarState> states;
         Dictionary<string, vFolder> folderList;
