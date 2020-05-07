@@ -13,7 +13,7 @@ namespace seekableExtraction.Extractors
      */
     public class Tar : Extractor
     {
-
+        static int min_tar_size = 1024; //A valid non-multi-volume tar file should have at least 1024 bytes
         string filepath, statemapPath;
         Dictionary<string, TarState> states;
         Dictionary<string, vFolder> folderList;
@@ -21,6 +21,8 @@ namespace seekableExtraction.Extractors
         TarState current_state;
         public Tar(ExtractorOptions options) : base(options)
         {
+            if ((new FileInfo(options.archive_filepath)).Length < min_tar_size)
+                throw new NotSupportedException("The provided tar file is invalid");
             filepath = options.archive_filepath;
             statemapPath = filepath + ".statemap";
             states = new Dictionary<string, TarState>();
@@ -54,9 +56,8 @@ namespace seekableExtraction.Extractors
             using (FileStream fs = File.OpenRead(filepath))
             using (BinaryReader reader = new BinaryReader(fs))
             {
-                //1024 refers to end-of-file marker
                 while (!Skip_emprty_blocks(reader) &&
-                        reader.BaseStream.Position + 1024 < reader.BaseStream.Length)
+                        reader.BaseStream.Position < reader.BaseStream.Length)
                 {
                     long start_position = reader.BaseStream.Position;
 
@@ -292,6 +293,12 @@ namespace seekableExtraction.Extractors
 
         public new static bool Check_compatibility(ExtractorOptions option) {
             //Naive implementation to check compatibility... probably will change it in the future
+
+            //Check file size
+            if ((new FileInfo(option.archive_filepath)).Length < min_tar_size)
+                return false;
+
+            //Check file extension
             vFile file = new vFile(option.archive_filepath);
             return file.Name.EndsWith(".tar");
         }
