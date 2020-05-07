@@ -52,7 +52,10 @@ namespace seekableExtraction.Extractors
 
         public override bool Generate_statemap(bool checkHeaderIntegrity = true)
         {
-            //The code contains many magic number that are corressponds to blocksize (512)
+            //Long filepath related variables, longPathName is used as cache for long filepath readed.
+            bool hasLongFilepath = false;
+            string stored_Longname = "";
+
             using (FileStream fs = File.OpenRead(filepath))
             using (BinaryReader reader = new BinaryReader(fs))
             {
@@ -68,8 +71,11 @@ namespace seekableExtraction.Extractors
 
                     current_state = new TarState();
                     current_state.fullFilepath = ByteUtil.To_readable_string(reader.ReadBytes(100)).Trim('\0');
-                    if (current_state.fullFilepath == "././@LongLink")
-                        throw new NotSupportedException("[TODO] tar file that has long file path is not supported");
+                    if (hasLongFilepath) {
+                        current_state.fullFilepath = stored_Longname;
+                        hasLongFilepath = false;
+                    }
+
                     if (states.ContainsKey(current_state.fullFilepath))
                         throw new ParseErrorException("Dupelicated filepath found in tar file, There is currently no plan to support hardlink/softlink");
 
@@ -85,11 +91,10 @@ namespace seekableExtraction.Extractors
                     reader.BaseStream.Position += 20;
 
                     byte type_flag = reader.ReadByte();
-
-                    if (type_flag == '0' || type_flag == '\0')
-                        current_state.type = '0'; //File
-                    else if (type_flag == '5')
-                        current_state.type = '5'; //Folder
+                    if ((type_flag == '0' || type_flag == '\0') || //File
+                        type_flag == '5' || //Folder
+                        type_flag == 'L') //GNU_Longname
+                        current_state.type = (char) type_flag; //File
                     else
                         throw new NotSupportedException("This Tar file is currently not supported, type:" + ByteUtil.Encode_to_string(type_flag));
 
@@ -118,9 +123,20 @@ namespace seekableExtraction.Extractors
                         roundup_filesize += 512 - current_state.size % 512;
 
                     current_state.offset_in_tar_file = start_position + 512; //512 == size of tar header roundup
+                    if (type_flag == 'L')
+                    {
+                        //read longPathName before we skip it.
+                        hasLongFilepath = true;
+                        reader.BaseStream.Position = current_state.offset_in_tar_file;
+                        //TODO: support long path loger than 2147483647 bytes (aka 2147483647 UTF-8 characters) (I doubt I will do this in a decade)
+                        stored_Longname = ByteUtil.To_readable_string(reader.ReadBytes((int)current_state.size));
+                    }
+                    else
+                    {
+                        states.Add(current_state.fullFilepath, current_state);
+                    }
                     reader.BaseStream.Position = current_state.offset_in_tar_file + roundup_filesize;
 
-                    states.Add(current_state.fullFilepath, current_state);
 
                     //Register the folder/file we read.
                     if (type_flag == '5')
@@ -129,14 +145,16 @@ namespace seekableExtraction.Extractors
                         vFolder folder = new vFolder(current_state.fullFilepath, current_state.size);
                         folderList.Add(folder.AbsolutePath, folder);
                     }
-                    else
+                    else if (type_flag == '0')
                     {
                         //This is a file
                         vFile file = new vFile(current_state.fullFilepath, current_state.size);
                         folderList[file.Prefix].Files.Add(file);
                         fileList.Add(file.AbsolutePath, file);
+                    } else if (type_flag != 'L') {
+                        //It is not GNU_Longname either!!!???
+                        throw new FileCorruoptedException($"Unknown type flag detected {(char)type_flag}, it's probably (99.9%) due to developer not taken care of the code.");
                     }
-
                 }
                 return true;
             }

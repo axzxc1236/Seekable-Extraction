@@ -10,7 +10,7 @@ namespace developerSandbox
         static void Main(string[] args)
         {
             ExtractorOptions option = new ExtractorOptions();
-            option.archive_filepath = @"F:\free mount test\Bigger than 8GB.tar";
+            option.archive_filepath = @"F:\free mount test\01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789.tar";
             if (File.Exists(option.archive_filepath + ".statemap"))
                 File.Delete(option.archive_filepath + ".statemap");
             Extractor x = seekableExtraction.AutoExtractor.findExtractor(option);
@@ -22,7 +22,7 @@ namespace developerSandbox
                 foreach (vFile file in x.FileList.Values)
                 {
                     Console.WriteLine($"Path: {file.AbsolutePath}");
-                    byte[] contents = x.Read(file.AbsolutePath, 300, 0).data;
+                    byte[] contents = x.Read(file.AbsolutePath, (int) file.Size, 0).data;
                     Console.WriteLine($"Content: {BitConverter.ToString(contents)}");
                 }
             }
