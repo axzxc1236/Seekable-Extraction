@@ -166,7 +166,7 @@ namespace seekableExtraction.Extractors
                 expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
                 reader.BaseStream.Position += 1;
 
-                for (int i = (int)(reader.BaseStream.Position - initial_position); i < initial_position+512; i++)
+                for (long i = reader.BaseStream.Position; i < initial_position+512; i++)
                     checksum += reader.ReadByte();
 
                 reader.BaseStream.Position = initial_position;
