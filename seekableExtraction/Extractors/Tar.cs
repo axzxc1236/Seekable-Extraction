@@ -129,7 +129,7 @@ namespace seekableExtraction.Extractors
                         hasLongFilepath = true;
                         reader.BaseStream.Position = current_state.offset_in_tar_file;
                         //TODO: support long path loger than 2147483647 bytes (aka 2147483647 UTF-8 characters) (I doubt I will do this in a decade)
-                        stored_Longname = ByteUtil.To_readable_string(reader.ReadBytes((int)current_state.size));
+                        stored_Longname = ByteUtil.To_readable_string(reader.ReadBytes((int)current_state.size)).Trim('\0');
                     }
                     else
                     {
