@@ -17,6 +17,7 @@ namespace seekableExtraction.Extractors
     public class Tar : Extractor
     {
         const int min_tar_size = 1024; //A valid non-multi-volume tar file should have at least 1024 bytes
+
         string filepath, statemapPath;
         Dictionary<string, TarState> states;
         Dictionary<string, vFolder> folderList;
@@ -58,11 +59,9 @@ namespace seekableExtraction.Extractors
             //Long filepath related variables, longPathName is used as cache for long filepath readed.
             bool hasLongFilepath = false;
             string stored_Longname = "";
-
             //PAX Extended filename
             bool hasPAXFileName = false;
             string stored_PAX_Filename = "";
-
             //PAX Global extended filename
             bool hasPAXGlobalFileName = false;
             string stored_PAX_Global_Filename = "";
@@ -98,12 +97,14 @@ namespace seekableExtraction.Extractors
                     reader.BaseStream.Position += 20;
 
                     char type_flag = (char) reader.ReadByte();
-                    if ((type_flag == '0' || type_flag == '\0') || //File
-                        type_flag == '5' || //Folder
-                        type_flag == 'L' || //GNU_Longname
-                        type_flag == 'x' || //PAX Extended header
-                        type_flag == 'g') //PAX Global extended header
-                        current_state.type = type_flag; //File
+                    if (type_flag == '\0') type_flag = TarType.File;
+
+                    if (type_flag == TarType.File || //File
+                        type_flag == TarType.Directory || //Directory
+                        type_flag == TarType.GNU_Longname || //GNU_Longname
+                        type_flag == TarType.PAX_Extended_header || //PAX Extended header
+                        type_flag == TarType.PAX_Global_extended_header) //PAX Global extended header
+                        current_state.type = type_flag;
                     else
                         throw new NotSupportedException("This Tar file is currently not supported, type:" + type_flag);
 
@@ -149,21 +150,21 @@ namespace seekableExtraction.Extractors
 
                     current_state.offset_in_tar_file = start_position + 512; //512 == size of tar header roundup
                     reader.BaseStream.Position = current_state.offset_in_tar_file;
-                    if (type_flag == 'L')
+                    if (type_flag == TarType.GNU_Longname)
                     {
                         //read longPathName before we skip it.
                         hasLongFilepath = true;
                         //TODO: support long path loger than 2147483647 bytes (aka 2147483647 UTF-8 characters) (I doubt I will do this in a decade)
                         stored_Longname = ByteUtil.To_readable_string(reader.ReadBytes((int)current_state.size)).Trim('\0');
                     }
-                    else if (type_flag == 'x')
+                    else if (type_flag == TarType.PAX_Extended_header)
                     {
                         //PAX Extended header
                         (bool, string) result = read_PAX_header(reader, current_state.size);
                         hasPAXFileName = result.Item1;
                         stored_PAX_Filename = result.Item2;
                     }
-                    else if (type_flag == 'g')
+                    else if (type_flag == TarType.PAX_Global_extended_header)
                     {
                         //PAX Global extended header
                         (bool, string) result = read_PAX_header(reader, current_state.size);
@@ -178,19 +179,21 @@ namespace seekableExtraction.Extractors
 
 
                     //Register the folder/file we read.
-                    if (type_flag == '5')
+                    if (type_flag == TarType.Directory)
                     {
                         //This is a folder
                         vFolder folder = new vFolder(current_state.fullFilepath, current_state.size);
                         folderList.Add(folder.AbsolutePath, folder);
                     }
-                    else if (type_flag == '0')
+                    else if (type_flag == TarType.File)
                     {
                         //This is a file
                         vFile file = new vFile(current_state.fullFilepath, current_state.size);
                         folderList[file.Prefix].Files.Add(file);
                         fileList.Add(file.AbsolutePath, file);
-                    } else if (type_flag != 'L' && type_flag != 'x' && type_flag != 'g') {
+                    } else if (type_flag != TarType.GNU_Longname &&
+                               type_flag != TarType.PAX_Extended_header &&
+                               type_flag != TarType.PAX_Global_extended_header) {
                         //It is also not other supported flag???
                         throw new FileCorruoptedException($"Unknown type flag detected {(char)type_flag}, it's probably (99.9%) due to developer not taken care of the code.");
                     }
@@ -390,6 +393,16 @@ namespace seekableExtraction.Extractors
             vFile file = new vFile(option.archive_filepath);
             return file.Name.EndsWith(".tar");
         }
+    }
+
+    static class TarType
+    {
+        public const char
+            File = '0',
+            Directory = '5',
+            GNU_Longname = 'L',
+            PAX_Extended_header = 'x',
+            PAX_Global_extended_header = 'g';
     }
 
     class TarState
