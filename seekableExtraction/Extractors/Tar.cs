@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
 using seekableExtraction.Common;
 
 namespace seekableExtraction.Extractors
@@ -10,6 +12,7 @@ namespace seekableExtraction.Extractors
      * https://en.wikipedia.org/wiki/Tar_(computing)
      * https://www.gnu.org/software/tar/manual/html_node/Standard.html
      * https://manpages.debian.org/testing/libarchive-dev/tar.5.en.html
+     * http://www.open-std.org/jtc1/sc22/open/n4217.pdf#page=2986 (PAX header section in POSIX standard)
      */
     public class Tar : Extractor
     {
@@ -56,6 +59,14 @@ namespace seekableExtraction.Extractors
             bool hasLongFilepath = false;
             string stored_Longname = "";
 
+            //PAX Extended filename
+            bool hasPAXFileName = false;
+            string stored_PAX_Filename = "";
+
+            //PAX Global extended filename
+            bool hasPAXGlobalFileName = false;
+            string stored_PAX_Global_Filename = "";
+
             using (FileStream fs = File.OpenRead(filepath))
             using (BinaryReader reader = new BinaryReader(fs))
             {
@@ -71,10 +82,6 @@ namespace seekableExtraction.Extractors
 
                     current_state = new TarState();
                     current_state.fullFilepath = ByteUtil.To_readable_string(reader.ReadBytes(100)).Trim('\0');
-                    if (hasLongFilepath) {
-                        current_state.fullFilepath = stored_Longname;
-                        hasLongFilepath = false;
-                    }
 
                     if (states.ContainsKey(current_state.fullFilepath))
                         throw new ParseErrorException("Dupelicated filepath found in tar file, There is currently no plan to support hardlink/softlink");
@@ -90,13 +97,15 @@ namespace seekableExtraction.Extractors
                     //Last modification time in numeric Unix time format (octal)  and  Checksum for header record
                     reader.BaseStream.Position += 20;
 
-                    byte type_flag = reader.ReadByte();
+                    char type_flag = (char) reader.ReadByte();
                     if ((type_flag == '0' || type_flag == '\0') || //File
                         type_flag == '5' || //Folder
-                        type_flag == 'L') //GNU_Longname
-                        current_state.type = (char) type_flag; //File
+                        type_flag == 'L' || //GNU_Longname
+                        type_flag == 'x' || //PAX Extended header
+                        type_flag == 'g') //PAX Global extended header
+                        current_state.type = type_flag; //File
                     else
-                        throw new NotSupportedException("This Tar file is currently not supported, type:" + ByteUtil.Encode_to_string(type_flag));
+                        throw new NotSupportedException("This Tar file is currently not supported, type:" + type_flag);
 
                     //Skip metadata that has no use to this program
                     //Name of linked file
@@ -116,6 +125,22 @@ namespace seekableExtraction.Extractors
                             throw new ParseErrorException("Dupelicated filepath found in tar file, There is currently no plan to support hardlink/softlink");
                     }
 
+                    //Restore saved file name if there is any.
+                    if (hasLongFilepath)
+                    {
+                        current_state.fullFilepath = stored_Longname;
+                        hasLongFilepath = false;
+                    }
+                    else if (hasPAXFileName)
+                    {
+                        current_state.fullFilepath = stored_PAX_Filename;
+                        hasPAXFileName = false;
+                    }
+                    else if (hasPAXGlobalFileName)
+                    {
+                        current_state.fullFilepath = stored_PAX_Global_Filename;
+                    }
+
                     //final processing
                     current_state.fullFilepath = vFile.Unify_filepath(current_state.fullFilepath);
                     long roundup_filesize = current_state.size;
@@ -123,13 +148,27 @@ namespace seekableExtraction.Extractors
                         roundup_filesize += 512 - current_state.size % 512;
 
                     current_state.offset_in_tar_file = start_position + 512; //512 == size of tar header roundup
+                    reader.BaseStream.Position = current_state.offset_in_tar_file;
                     if (type_flag == 'L')
                     {
                         //read longPathName before we skip it.
                         hasLongFilepath = true;
-                        reader.BaseStream.Position = current_state.offset_in_tar_file;
                         //TODO: support long path loger than 2147483647 bytes (aka 2147483647 UTF-8 characters) (I doubt I will do this in a decade)
                         stored_Longname = ByteUtil.To_readable_string(reader.ReadBytes((int)current_state.size)).Trim('\0');
+                    }
+                    else if (type_flag == 'x')
+                    {
+                        //PAX Extended header
+                        (bool, string) result = read_PAX_header(reader, current_state.size);
+                        hasPAXFileName = result.Item1;
+                        stored_PAX_Filename = result.Item2;
+                    }
+                    else if (type_flag == 'g')
+                    {
+                        //PAX Global extended header
+                        (bool, string) result = read_PAX_header(reader, current_state.size);
+                        hasPAXGlobalFileName = result.Item1;
+                        stored_PAX_Global_Filename = result.Item2;
                     }
                     else
                     {
@@ -151,8 +190,8 @@ namespace seekableExtraction.Extractors
                         vFile file = new vFile(current_state.fullFilepath, current_state.size);
                         folderList[file.Prefix].Files.Add(file);
                         fileList.Add(file.AbsolutePath, file);
-                    } else if (type_flag != 'L') {
-                        //It is not GNU_Longname either!!!???
+                    } else if (type_flag != 'L' && type_flag != 'x' && type_flag != 'g') {
+                        //It is also not other supported flag???
                         throw new FileCorruoptedException($"Unknown type flag detected {(char)type_flag}, it's probably (99.9%) due to developer not taken care of the code.");
                     }
                 }
@@ -307,6 +346,37 @@ namespace seekableExtraction.Extractors
             {
                 throw new NotSupportedException("Looks like you are working with very large tar file (>8PiB) (assuming there is no other bug), I am sorry to say this program doesn't support it.");
             }
+        }
+
+        /// <summary>
+        /// Parse PAX header and return filepath encoded in PAX format if detected.<br/>
+        /// This function assume "reader" passed in is at the beginning of a PAX header.<br/>
+        /// WILL NOT reset reader.BaseStream's position in any case<br/>
+        /// WARNING: This parser is not a complete implementation
+        /// </summary>
+        (bool containsFilepath, string filepath) read_PAX_header(BinaryReader reader, long header_length)
+        {
+            long initial_position = reader.BaseStream.Position;
+            long readed_bytes = 0;
+            string rawHeaders = ByteUtil.To_readable_string(reader.ReadBytes((int)header_length));
+            string pattern = @"(\d+) (\w*?)=(.*?)\n"; //pattern to parse PAX header
+            string readed_filepath = "";
+            if (rawHeaders.Contains('\0')) //There should be no null character in rawHeaders
+                throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{initial_position.ToString("X")}");
+            foreach (Match match in Regex.Matches(rawHeaders, pattern)) {
+                if (Encoding.UTF8.GetByteCount(match.Value) != long.Parse(match.Groups[1].Value) ||
+                    match.Groups[2].Value.ToLower() != match.Groups[2].Value)
+                    throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{(initial_position + readed_bytes).ToString("X")}");
+                else if (match.Groups[2].Value == "charset")
+                    throw new NotSupportedException("The current Tar extractor implementation doesn't support other text encoding");
+                else if (match.Groups[2].Value == "path")
+                    readed_filepath = match.Groups[3].Value;
+
+                readed_bytes += long.Parse(match.Groups[1].Value);
+            }
+            if (readed_bytes != header_length)
+                throw new FileCorruoptedException($"PAX header \"might\" be corrupted, please contact software developer, position 0x{initial_position.ToString("X")}");
+            return (readed_filepath != "", readed_filepath);
         }
 
         public new static bool Check_compatibility(ExtractorOptions option) {
