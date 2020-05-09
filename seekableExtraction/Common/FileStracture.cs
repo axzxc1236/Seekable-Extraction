@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Text.RegularExpressions;
+using System.Text;
 
 namespace seekableExtraction.Common
 {
@@ -63,14 +62,19 @@ namespace seekableExtraction.Common
         /// Given a filepath string (will be unified before processing), return a tuple in following format:<br/>
         /// (Prefix, Filename)  a Tuple object<br/>
         /// Prefix will starts with and ends with "/"<br/>
-        /// Filename doesn't contain any backslashes.
+        /// Filename doesn't contain any slashes.
         /// </summary>
         public static (string Prefix, string Filename) Parse_filepath(string input) {
-            if (input == "/") return ("/", ""); //special case for root
-            Match match = Regex.Match(Unify_filepath(input),
-                                      @"^(.*?)([^\/]*?)[\/]?$");//Regex pattern to parse folder prefix and filename
-            if (!match.Success) throw new Exception("Failed to parse filepath " + input);
-            return (match.Groups[1].Value, match.Groups[2].Value);
+            StringBuilder prefix = new StringBuilder('/');
+            string[] names = Unify_filepath(input).Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (names.Length == 0)
+                //special case for root
+                return ("/", "");
+            else {
+                for (int i = 0; i < names.Length - 1; i++)
+                    prefix.Append($"{names[i]}/");
+                return (prefix.ToString(), names[names.Length - 1]);
+            }
         }
     }
 }
