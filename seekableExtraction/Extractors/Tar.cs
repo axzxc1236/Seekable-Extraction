@@ -360,9 +360,6 @@ namespace seekableExtraction.Extractors
         {
             long initial_position = reader.BaseStream.Position;
             long readed_bytes = 0;
-            //string rawHeaders = ByteUtil.To_readable_string(reader.ReadBytes((int)total_header_length));
-            //string pattern = @"(\d+) (\w*?)=(.*?)\n"; //pattern to parse PAX header
-            string readed_filepath = "";
 
             while (readed_bytes < total_header_length) {
                 //A header format is
@@ -407,7 +404,7 @@ namespace seekableExtraction.Extractors
             }
             if (readed_bytes != total_header_length)
                 throw new FileCorruoptedException($"PAX header \"might\" be corrupted, please contact software developer of seekableExtraction, position 0x{initial_position.ToString("X")}");
-            return (readed_filepath != "", readed_filepath);
+            return (false, string.Empty);
         }
 
         public new static bool Check_compatibility(ExtractorOptions option) {
