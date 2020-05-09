@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using seekableExtraction.Common;
 
 namespace seekableExtraction.Extractors
@@ -357,28 +356,57 @@ namespace seekableExtraction.Extractors
         /// WILL NOT reset reader.BaseStream's position in any case<br/>
         /// WARNING: This parser is not a complete implementation
         /// </summary>
-        (bool containsFilepath, string filepath) read_PAX_header(BinaryReader reader, long header_length)
+        (bool containsFilepath, string filepath) read_PAX_header(BinaryReader reader, long total_header_length)
         {
             long initial_position = reader.BaseStream.Position;
             long readed_bytes = 0;
-            string rawHeaders = ByteUtil.To_readable_string(reader.ReadBytes((int)header_length));
-            string pattern = @"(\d+) (\w*?)=(.*?)\n"; //pattern to parse PAX header
+            //string rawHeaders = ByteUtil.To_readable_string(reader.ReadBytes((int)total_header_length));
+            //string pattern = @"(\d+) (\w*?)=(.*?)\n"; //pattern to parse PAX header
             string readed_filepath = "";
-            if (rawHeaders.Contains('\0')) //There should be no null character in rawHeaders
-                throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{initial_position.ToString("X")}");
-            foreach (Match match in Regex.Matches(rawHeaders, pattern)) {
-                if (Encoding.UTF8.GetByteCount(match.Value) != long.Parse(match.Groups[1].Value) ||
-                    match.Groups[2].Value.ToLower() != match.Groups[2].Value)
-                    throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{(initial_position + readed_bytes).ToString("X")}");
-                else if (match.Groups[2].Value == "charset")
-                    throw new NotSupportedException("The current Tar extractor implementation doesn't support other text encoding");
-                else if (match.Groups[2].Value == "path")
-                    readed_filepath = match.Groups[3].Value;
 
-                readed_bytes += long.Parse(match.Groups[1].Value);
+            while (readed_bytes < total_header_length) {
+                //A header format is
+                //"<length> <keyword>=<value>\n"
+                //<Length> is a number represented in ascii, a signed integer.
+                //<keyword> is a string that only contains lower case letters and digits
+                //<value> is a string that can have arbitary data.
+                //(on paper it might be encoded in something other than UTF-8, but there is currently no plan to support charset)
+
+                //literally a char variable to hold a character, I can't came up with a good variable name
+                char _char;
+
+                //Parse <Length>
+                StringBuilder Length_in_string = new StringBuilder();
+                while ((_char = (char)reader.ReadByte()) != ' ')
+                    if (!char.IsControl(_char))
+                        Length_in_string.Append(_char);
+                    else
+                        throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{(initial_position + readed_bytes).ToString("X")}");
+                int Length = int.Parse(Length_in_string.ToString());
+
+                //Parse <keyword>
+                StringBuilder Keyword = new StringBuilder();
+                while ((_char = (char)reader.ReadByte()) != '=')
+                    if (char.IsLower(_char) || char.IsDigit(_char))
+                        Keyword.Append(_char);
+                    else
+                        throw new FileCorruoptedException($"Invalid PAX header detected, position 0x{(initial_position + readed_bytes).ToString("X")}");
+
+                //Parse <value>
+                string value = ByteUtil.To_readable_string(reader.ReadBytes(Length - Length_in_string.Length - 1 - Keyword.Length - 1 - 1));
+
+                //Discard \n
+                reader.BaseStream.Position++;
+
+                if (Keyword.ToString() == "path")
+                    return (true, value); 
+                else if (Keyword.ToString() == "charset")
+                    throw new NotSupportedException("The current Tar extractor implementation doesn't support other text encoding");
+
+                readed_bytes += Length;
             }
-            if (readed_bytes != header_length)
-                throw new FileCorruoptedException($"PAX header \"might\" be corrupted, please contact software developer, position 0x{initial_position.ToString("X")}");
+            if (readed_bytes != total_header_length)
+                throw new FileCorruoptedException($"PAX header \"might\" be corrupted, please contact software developer of seekableExtraction, position 0x{initial_position.ToString("X")}");
             return (readed_filepath != "", readed_filepath);
         }
 
