@@ -64,16 +64,15 @@ namespace seekableExtraction.Common
         /// Prefix will starts with and ends with "/"<br/>
         /// Filename doesn't contain any slashes.
         /// </summary>
-        public static (string Prefix, string Filename) Parse_filepath(string input) {
-            StringBuilder prefix = new StringBuilder('/');
-            string[] names = Unify_filepath(input).Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (names.Length == 0)
-                //special case for root
+        public static (string Prefix, string Filename) Parse_filepath(string input)
+        {
+            string path = Unify_filepath(input);
+            if (path == "/")
                 return ("/", "");
             else {
-                for (int i = 0; i < names.Length - 1; i++)
-                    prefix.Append($"{names[i]}/");
-                return (prefix.ToString(), names[names.Length - 1]);
+                int delimiter_index = path.LastIndexOf('/', path.Length - 2);
+                return (path.Substring(0, delimiter_index + 1),
+                        path.Substring(delimiter_index + 1, path.Length - delimiter_index - 2));
             }
         }
     }
