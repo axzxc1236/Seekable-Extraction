@@ -24,7 +24,7 @@ namespace seekableExtraction.Extractors
         TarState current_state;
         public Tar(ExtractorOptions options) : base(options)
         {
-            if ((new FileInfo(options.archive_filepath)).Length < min_tar_size)
+            if (new FileInfo(options.archive_filepath).Length < min_tar_size)
                 throw new NotSupportedException("The provided tar file is invalid");
             filepath = options.archive_filepath;
             statemapPath = filepath + ".statemap";
@@ -78,6 +78,7 @@ namespace seekableExtraction.Extractors
                     if (!verify_header(reader))
                         throw new FileCorruoptedException(
                             $"The provided tar file might be corrupted (Header position: 0x{reader.BaseStream.Position.ToString("X")})");
+                    reader.BaseStream.Position = start_position;
 
                     current_state = new TarState();
                     current_state.fullFilepath = ByteUtil.To_readable_string(reader.ReadBytes(100)).Trim('\0');
@@ -96,6 +97,7 @@ namespace seekableExtraction.Extractors
                     //Last modification time in numeric Unix time format (octal)  and  Checksum for header record
                     reader.BaseStream.Position += 20;
 
+                    //Type flag
                     char type_flag = (char)reader.ReadByte();
                     if (type_flag == '\0') type_flag = TarType.File;
 
@@ -205,7 +207,7 @@ namespace seekableExtraction.Extractors
         }
 
         /// <summary>
-        /// Verify Integrity of tar v7 header, Stream POSITION WILL BE RESTORED after integrity check.
+        /// Verify Integrity of tar v7 header, Stream POSITION WILL NOT BE RESTORED after integrity check.
         /// </summary>
         /// <returns>
         /// true if verification has passed, false if not (indicates that file might be corrupted)
@@ -216,36 +218,21 @@ namespace seekableExtraction.Extractors
             //The bytes that is supposed to represent checksum is to be seem as " " (ascii space char, decimal value 32) during calculation.
             //The initial value of checksum (256) has accounted for those 8 bytes
             int checksum = 256, expected_checksum;
-            try
-            {
-                //v7 header
-                if (reader.BaseStream.Position + 257 > reader.BaseStream.Length)
-                    throw new FileCorruoptedException("There is not enough space to fit header in this tar file, assume the file as corrupted");
-                for (int i = 0; i < 148; i++)
-                    checksum += reader.ReadByte();
-                reader.BaseStream.Position += 1;
-                expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
-                reader.BaseStream.Position += 1;
 
-                for (long i = reader.BaseStream.Position; i < initial_position + 512; i++)
-                    checksum += reader.ReadByte();
+            //v7 header
+            if (reader.BaseStream.Position + 257 > reader.BaseStream.Length)
+                throw new FileCorruoptedException("There is not enough space to fit header in this tar file, assume the file as corrupted");
+            for (int i = 0; i < 148; i++)
+                checksum += reader.ReadByte();
+            reader.BaseStream.Position += 1;
+            expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
+            reader.BaseStream.Position += 1;
 
-                reader.BaseStream.Position = initial_position;
-                return expected_checksum == checksum;
-            }
-            catch (Exception e1)
-            {
-                //Ugly exception handling... I hope I will come up with a better way to handle this.
-                try
-                {
-                    reader.BaseStream.Position = initial_position;
-                }
-                catch (Exception e2)
-                {
-                    throw e2;
-                }
-                throw e1;
-            }
+            for (long i = reader.BaseStream.Position; i < initial_position + 512; i++)
+                checksum += reader.ReadByte();
+
+            reader.BaseStream.Position = initial_position;
+            return expected_checksum == checksum;
         }
 
         public override bool Load_statemap()
