@@ -226,9 +226,7 @@ namespace seekableExtraction.Extractors
                 throw new FileCorruoptedException("There is not enough space to fit header in this tar file, assume the file as corrupted");
             for (int i = 0; i < 148; i++)
                 checksum += reader.ReadByte();
-            reader.BaseStream.Position += 1;
-            expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
-            reader.BaseStream.Position += 1;
+            expected_checksum = (int)NumberUtil.ASCII_bytes_to_number(reader.ReadBytes(8), 8);
 
             for (long i = reader.BaseStream.Position; i < initial_position + 512; i++)
                 checksum += reader.ReadByte();
@@ -317,7 +315,7 @@ namespace seekableExtraction.Extractors
                 {
                     //Normal file size format (<= 8GB)
                     reader.BaseStream.Position--;
-                    return NumberUtil.Bytes_to_number(reader.ReadBytes(12), 8);
+                    return NumberUtil.ASCII_bytes_to_number(reader.ReadBytes(12), 8);
                 }
                 else
                 {
