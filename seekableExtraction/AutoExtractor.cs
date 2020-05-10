@@ -9,7 +9,8 @@ namespace seekableExtraction
         /// Return null if there is not a suitable extractor.
         /// Otherwise return a Extractor with option passed.
         /// </summary>
-        public static Extractor findExtractor(ExtractorOptions option = null) {
+        public static Extractor findExtractor(ExtractorOptions option = null)
+        {
             if (Tar.Check_compatibility(option))
                 return new Tar(option);
             return null;

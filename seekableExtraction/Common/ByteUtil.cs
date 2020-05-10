@@ -13,19 +13,22 @@ namespace seekableExtraction.Common
             return BitConverter.ToString(new byte[] { input });
         }
 
-        public static byte[] Decode_from_string(string input, char delimiter) {
+        public static byte[] Decode_from_string(string input, char delimiter)
+        {
             string[] array = input.Split(delimiter);
             byte[] result = new byte[array.Length];
             int counter = 0;
-            foreach (string s in array) {
+            foreach (string s in array)
+            {
                 result[counter] = Convert.ToByte(array[counter], 16);
                 counter++;
             }
             return result;
         }
 
-        public static string To_readable_string(byte[] input) {
-            return System.Text.Encoding.UTF8.GetString(input);
+        public static string To_readable_string(byte[] input)
+        {
+            return System.Text.Encoding.UTF8.GetString(input, 0, input.Length);
         }
     }
 }

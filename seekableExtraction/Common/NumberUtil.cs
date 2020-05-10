@@ -19,7 +19,7 @@ namespace seekableExtraction.Common
         /// <returns></returns>
         public static long Bytes_to_number(byte[] input, int _base = 10)
         {
-            return Convert.ToInt64(System.Text.Encoding.UTF8.GetString(input).Replace("\0", ""), _base);
+            return Convert.ToInt64(System.Text.Encoding.UTF8.GetString(input, 0, input.Length).Replace("\0", ""), _base);
         }
     }
 }

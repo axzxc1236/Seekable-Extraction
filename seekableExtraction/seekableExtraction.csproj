@@ -1,12 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>netstandard1.3</TargetFramework>
+    <Version>0.0.1</Version>
+    <Authors>axzxc1236</Authors>
+    <PackageProjectUrl>https://github.com/axzxc1236/Seekable-Extraction/</PackageProjectUrl>
+    <Copyright>LGPL v2.1</Copyright>
+    <RepositoryUrl>https://github.com/axzxc1236/Seekable-Extraction/</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Hashing\" />
+    <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="DeCompression\" />
     <Folder Include="Decryption\" />
+    <Folder Include="Hashing\" />
   </ItemGroup>
 
 </Project>

@@ -19,8 +19,8 @@ namespace seekableExtraction.Extractors
 
         string filepath, statemapPath;
         Dictionary<string, TarState> states;
-        Dictionary<string, vFolder> folderList;
-        Dictionary<string, vFile> fileList;
+        Dictionary<string, VFolder> folderList;
+        Dictionary<string, VFile> fileList;
         TarState current_state;
         public Tar(ExtractorOptions options) : base(options)
         {
@@ -29,14 +29,15 @@ namespace seekableExtraction.Extractors
             filepath = options.archive_filepath;
             statemapPath = filepath + ".statemap";
             states = new Dictionary<string, TarState>();
-            folderList = new Dictionary<string, vFolder>();
-            folderList.Add("/", vFolder.rootFolder);
-            fileList = new Dictionary<string, vFile>();
+            folderList = new Dictionary<string, VFolder>();
+            folderList.Add("/", VFolder.RootFolder);
+            fileList = new Dictionary<string, VFile>();
         }
-        public override Dictionary<string, vFile> FileList => fileList;
-        public override Dictionary<string, vFolder> FolderList => folderList;
+        public override Dictionary<string, VFile> FileList => fileList;
+        public override Dictionary<string, VFolder> FolderList => folderList;
 
-        public override (byte[], int) Read(vFile file, int length, long offset) {
+        public override (byte[], int) Read(VFile file, int length, long offset)
+        {
             //Prevent overflow to say... next tar header
             int actual_read_length = Math.Min((int)(file.Size - offset), length);
 
@@ -53,7 +54,7 @@ namespace seekableExtraction.Extractors
             return (buffer, bytesread);
         }
 
-        public override bool Generate_statemap(bool checkHeaderIntegrity = true)
+        public override bool Generate_statemap()
         {
             //Long filepath related variables, longPathName is used as cache for long filepath readed.
             bool hasLongFilepath = false;
@@ -74,7 +75,7 @@ namespace seekableExtraction.Extractors
                     long start_position = reader.BaseStream.Position;
 
                     //check header integrity
-                    if (checkHeaderIntegrity && !verify_header(reader))
+                    if (!verify_header(reader))
                         throw new FileCorruoptedException(
                             $"The provided tar file might be corrupted (Header position: 0x{reader.BaseStream.Position.ToString("X")})");
 
@@ -95,7 +96,7 @@ namespace seekableExtraction.Extractors
                     //Last modification time in numeric Unix time format (octal)  and  Checksum for header record
                     reader.BaseStream.Position += 20;
 
-                    char type_flag = (char) reader.ReadByte();
+                    char type_flag = (char)reader.ReadByte();
                     if (type_flag == '\0') type_flag = TarType.File;
 
                     if (type_flag == TarType.File || //File
@@ -142,7 +143,7 @@ namespace seekableExtraction.Extractors
                     }
 
                     //final processing
-                    current_state.fullFilepath = vFile.Unify_filepath(current_state.fullFilepath);
+                    current_state.fullFilepath = VFile.Unify_filepath(current_state.fullFilepath);
                     long roundup_filesize = current_state.size;
                     if (current_state.size % 512 > 0)
                         roundup_filesize += 512 - current_state.size % 512;
@@ -181,18 +182,20 @@ namespace seekableExtraction.Extractors
                     if (type_flag == TarType.Directory)
                     {
                         //This is a folder
-                        vFolder folder = new vFolder(current_state.fullFilepath, current_state.size);
+                        VFolder folder = new VFolder(current_state.fullFilepath, current_state.size);
                         folderList.Add(folder.AbsolutePath, folder);
                     }
                     else if (type_flag == TarType.File)
                     {
                         //This is a file
-                        vFile file = new vFile(current_state.fullFilepath, current_state.size);
+                        VFile file = new VFile(current_state.fullFilepath, current_state.size);
                         folderList[file.Prefix].Files.Add(file);
                         fileList.Add(file.AbsolutePath, file);
-                    } else if (type_flag != TarType.GNU_Longname &&
-                               type_flag != TarType.PAX_Extended_header &&
-                               type_flag != TarType.PAX_Global_extended_header) {
+                    }
+                    else if (type_flag != TarType.GNU_Longname &&
+                             type_flag != TarType.PAX_Extended_header &&
+                             type_flag != TarType.PAX_Global_extended_header)
+                    {
                         //It is also not other supported flag???
                         throw new FileCorruoptedException($"Unknown type flag detected {(char)type_flag}, it's probably (99.9%) due to developer not taken care of the code.");
                     }
@@ -202,8 +205,7 @@ namespace seekableExtraction.Extractors
         }
 
         /// <summary>
-        /// Verify Integrity of tar v7 header, Stream POSITION WILL BE RESTORED after integrity check.<br/>
-        /// WARNING: has try/catch block can silence exceptions (I might need to come up with another way to handle this....)
+        /// Verify Integrity of tar v7 header, Stream POSITION WILL BE RESTORED after integrity check.
         /// </summary>
         /// <returns>
         /// true if verification has passed, false if not (indicates that file might be corrupted)
@@ -225,7 +227,7 @@ namespace seekableExtraction.Extractors
                 expected_checksum = (int)NumberUtil.Bytes_to_number(reader.ReadBytes(6), 8);
                 reader.BaseStream.Position += 1;
 
-                for (long i = reader.BaseStream.Position; i < initial_position+512; i++)
+                for (long i = reader.BaseStream.Position; i < initial_position + 512; i++)
                     checksum += reader.ReadByte();
 
                 reader.BaseStream.Position = initial_position;
@@ -251,7 +253,7 @@ namespace seekableExtraction.Extractors
             states.Clear();
             fileList.Clear();
             folderList.Clear();
-            folderList.Add("/", vFolder.rootFolder);
+            folderList.Add("/", VFolder.RootFolder);
             if (!File.Exists(statemapPath))
                 return false;
             using (StreamReader reader = File.OpenText(statemapPath))
@@ -259,7 +261,7 @@ namespace seekableExtraction.Extractors
                 string s;
                 while ((s = reader.ReadLine()) != null)
                 {
-                    if (s == "" || s.StartsWith('#')) continue;
+                    if (s == "" || s.StartsWith("#")) continue;
                     string[] rawStates = s.Split('\0');
                     TarState state = new TarState();
                     state.type = rawStates[0][0];
@@ -268,9 +270,9 @@ namespace seekableExtraction.Extractors
                     state.size = long.Parse(rawStates[3]);
 
                     if (state.type == '0')
-                        fileList.Add(state.fullFilepath, new vFile(state.fullFilepath, state.size));
+                        fileList.Add(state.fullFilepath, new VFile(state.fullFilepath, state.size));
                     else
-                        folderList.Add(state.fullFilepath, new vFolder(state.fullFilepath, state.size));
+                        folderList.Add(state.fullFilepath, new VFolder(state.fullFilepath, state.size));
 
                     states.Add(state.fullFilepath, state);
                 }
@@ -300,11 +302,15 @@ namespace seekableExtraction.Extractors
         /// otherwise the stream position will skip to next tar block.
         /// </summary>
         /// <returns>If there are skipped block, it returns true, otherwise false.</returns>
-        bool Skip_emprty_blocks(BinaryReader reader) {
-            if (reader.BaseStream.Position + 512 < reader.BaseStream.Length) {
+        bool Skip_emprty_blocks(BinaryReader reader)
+        {
+            if (reader.BaseStream.Position + 512 < reader.BaseStream.Length)
+            {
                 long initial_position = reader.BaseStream.Position;
-                for (int i = 0; i < 512; i++) {
-                    if (reader.ReadByte() != '\0') {
+                for (int i = 0; i < 512; i++)
+                {
+                    if (reader.ReadByte() != '\0')
+                    {
                         reader.BaseStream.Position = initial_position;
                         return false;
                     }
@@ -314,7 +320,8 @@ namespace seekableExtraction.Extractors
             return false;
         }
 
-        long Read_file_size(BinaryReader reader) {
+        long Read_file_size(BinaryReader reader)
+        {
             try
             {
                 if ((reader.ReadByte() & 0x80) == 0)
@@ -361,7 +368,8 @@ namespace seekableExtraction.Extractors
             long initial_position = reader.BaseStream.Position;
             long readed_bytes = 0;
 
-            while (readed_bytes < total_header_length) {
+            while (readed_bytes < total_header_length)
+            {
                 //A header format is
                 //"<length> <keyword>=<value>\n"
                 //<Length> is a number represented in ascii, a signed integer.
@@ -396,7 +404,7 @@ namespace seekableExtraction.Extractors
                 reader.BaseStream.Position++;
 
                 if (Keyword.ToString() == "path")
-                    return (true, value); 
+                    return (true, value);
                 else if (Keyword.ToString() == "charset")
                     throw new NotSupportedException("The current Tar extractor implementation doesn't support other text encoding");
 
@@ -407,7 +415,8 @@ namespace seekableExtraction.Extractors
             return (false, string.Empty);
         }
 
-        public new static bool Check_compatibility(ExtractorOptions option) {
+        public new static bool Check_compatibility(ExtractorOptions option)
+        {
             //Naive implementation to check compatibility... probably will change it in the future
 
             //Check file size
@@ -415,7 +424,7 @@ namespace seekableExtraction.Extractors
                 return false;
 
             //Check file extension
-            vFile file = new vFile(option.archive_filepath);
+            VFile file = new VFile(option.archive_filepath);
             return file.Name.EndsWith(".tar");
         }
     }
