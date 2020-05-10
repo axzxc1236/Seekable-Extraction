@@ -34,9 +34,9 @@ namespace seekableExtraction.Common
         /// </param>
         /// <param name="removeNonDigitBytes">Remove bytes that are not digits</param>
         /// <returns>decimal number</returns>
-        public static long ASCII_string_to_number(string input, int _base = 10, bool removeNonDigitBytes = true)
+        public static long ASCII_string_to_number(string input, int _base = 10, bool removeNonDigitChars = true)
         {
-            if (!removeNonDigitBytes)
+            if (!removeNonDigitChars)
                 return Convert.ToInt64(input, _base);
             else
             {
