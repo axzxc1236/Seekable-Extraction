@@ -27,7 +27,9 @@ namespace seekableExtraction.Extractors
             if (new FileInfo(options.archive_filepath).Length < min_tar_size)
                 throw new NotSupportedException("The provided tar file is invalid");
             filepath = options.archive_filepath;
-            statemapPath = filepath + ".statemap";
+            if (options.statemap_filepath == "")
+                options.statemap_filepath = filepath + ".statemap";
+            statemapPath = options.statemap_filepath;
             states = new Dictionary<string, TarState>();
             folderList = new Dictionary<string, VFolder>();
             folderList.Add("/", VFolder.RootFolder);

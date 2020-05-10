@@ -62,7 +62,7 @@ namespace seekableExtraction.Extractors
 
     public class ExtractorOptions
     {
-        public string archive_filepath;
+        public string archive_filepath = "", statemap_filepath = "";
     }
 
     #region Exceptions
