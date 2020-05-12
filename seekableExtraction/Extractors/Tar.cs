@@ -16,11 +16,10 @@ namespace seekableExtraction.Extractors
     public class Tar : Extractor
     {
         const int min_tar_size = 1024; //A valid non-multi-volume tar file should have at least 1024 bytes
-
-        string filepath, statemapPath;
-        Dictionary<string, TarState> states;
-        Dictionary<string, VFolder> folderList;
-        Dictionary<string, VFile> fileList;
+        readonly string filepath, statemapPath;
+        readonly Dictionary<string, TarState> states;
+        readonly Dictionary<string, VFolder> folderList;
+        readonly Dictionary<string, VFile> fileList;
         TarState current_state;
         public Tar(ExtractorOptions options) : base(options)
         {
@@ -69,7 +68,7 @@ namespace seekableExtraction.Extractors
             string stored_PAX_Global_Filename = "";
 
             using (FileStream fs = File.OpenRead(filepath))
-            using (BinaryReader reader = new BinaryReader(fs))
+            using (BinaryReader reader = new BinaryReader(fs, Encoding.UTF8))
             {
                 while (!Skip_emprty_blocks(reader) &&
                         reader.BaseStream.Position < reader.BaseStream.Length)
@@ -100,7 +99,7 @@ namespace seekableExtraction.Extractors
                     reader.BaseStream.Position += 20;
 
                     //Type flag
-                    char type_flag = (char)reader.ReadByte();
+                    char type_flag = reader.ReadChar();
                     if (type_flag == '\0') type_flag = TarType.File;
 
                     if (type_flag == TarType.File || //File
@@ -119,7 +118,8 @@ namespace seekableExtraction.Extractors
                     //This is the end of v7 header
 
                     //Check for ustar marker
-                    if (ByteUtil.Encode_to_string(reader.ReadBytes(6), ' ') == "75 73 74 61 72 00")
+                    if (ByteUtil.To_readable_string(reader.ReadBytes(6)) == "ustar" &&
+                        reader.ReadByte() == char.MinValue)
                     {
                         //Skip metadata that has no use to this program
                         //UStar version "00", Owner user name, Owner group name, Device major number and Device minor number
@@ -369,7 +369,7 @@ namespace seekableExtraction.Extractors
 
                 //Parse <Length>
                 StringBuilder Length_in_string = new StringBuilder();
-                while ((_char = (char)reader.ReadByte()) != ' ')
+                while ((_char = reader.ReadChar()) != ' ')
                     if (!char.IsControl(_char))
                         Length_in_string.Append(_char);
                     else
@@ -378,7 +378,7 @@ namespace seekableExtraction.Extractors
 
                 //Parse <keyword>
                 StringBuilder Keyword = new StringBuilder();
-                while ((_char = (char)reader.ReadByte()) != '=')
+                while ((_char = reader.ReadChar()) != '=')
                     if (char.IsLower(_char) || char.IsDigit(_char))
                         Keyword.Append(_char);
                     else
